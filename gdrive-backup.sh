@@ -87,15 +87,40 @@ ask_number() {
     done
 }
 
+_read_masked() {
+    # Reads a password character by character, printing * for each keystroke.
+    # All display goes to /dev/tty so the actual value can be captured via $().
+    local prompt="$1" password="" char
+    printf '%b' "  ${YELLOW}?${NC} $prompt: " > /dev/tty
+    while IFS= read -r -s -n1 char; do
+        if [[ -z "$char" ]]; then                          # Enter
+            break
+        elif [[ "$char" == $'\x7f' || "$char" == $'\b' ]]; then  # Backspace
+            if [[ ${#password} -gt 0 ]]; then
+                password="${password%?}"
+                printf '\b \b' > /dev/tty
+            fi
+        elif [[ "$char" == $'\x15' ]]; then                # Ctrl+U — clear
+            local i; for ((i=0; i<${#password}; i++)); do printf '\b \b' > /dev/tty; done
+            password=""
+        else
+            password+="$char"
+            printf '*' > /dev/tty
+        fi
+    done
+    printf '\n' > /dev/tty
+    printf '%s' "$password"
+}
+
 ask_password() {
     local prompt="$1"
     while true; do
         local p1 p2
-        read -r -s -p "$(echo -e "  ${YELLOW}?${NC} $prompt: ")" p1; echo
-        read -r -s -p "$(echo -e "  ${YELLOW}?${NC} Confirm: ")" p2; echo
+        p1=$(_read_masked "$prompt")
+        p2=$(_read_masked "Confirm")
         if [[ "$p1" == "$p2" ]]; then
             [[ -z "$p1" ]] && { print_error "Password cannot be empty."; continue; }
-            echo "$p1"
+            printf '%s' "$p1"
             return
         fi
         print_error "Passwords do not match."
