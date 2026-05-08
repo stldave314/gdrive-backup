@@ -260,20 +260,17 @@ setup_rclone_drive() {
     fi
 
     echo
-    print_info "You will be asked to authorize rclone to access your Google Drive."
-    print_info "A browser window will open automatically."
-    print_info "If you are on a headless system, rclone will display a URL — paste it"
-    print_info "into any browser, authenticate, and paste the token back here."
+    print_info "rclone will print a URL below. Copy it and open it in any browser."
+    print_info "Log in to Google, grant access, and rclone will complete automatically."
     echo
     print_warn "Make sure you are logged into the correct Google account before proceeding."
     echo
-    read -r -p "$(echo -e "  ${YELLOW}Press ENTER to open the authentication page...${NC}")"
+    read -r -p "$(echo -e "  ${YELLOW}Press ENTER to generate the authorization URL...${NC}")"
     echo
 
     rclone config create "$GDRIVE_REMOTE" drive \
         scope="drive" \
-        --all 2>/dev/null || \
-    rclone config create "$GDRIVE_REMOTE" drive scope="drive"
+        --auth-no-open-browser
 
     print_ok "Google Drive remote '${GDRIVE_REMOTE}' configured."
 }
