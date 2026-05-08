@@ -1,0 +1,53 @@
+# rclone configuration (contains OAuth tokens and encryption passwords)
+rclone.conf
+*.conf.bak
+
+# gdrive-backup runtime config and secrets
+.config/
+config
+*.log
+backup.log
+
+# Staging directory used by Method A (local hardlink snapshots)
+staging/
+
+# Encryption password files or any credential exports
+*.gpg
+*.asc
+*.key
+*.pem
+*.p12
+*.pfx
+*.token
+*.secret
+*.credentials
+.env
+.env.*
+
+# apt key exports
+apt-keys/
+all-legacy.gpg
+
+# Package list exports if accidentally saved locally
+apt-packages.txt
+flatpak-packages.txt
+flatpak-remotes.txt
+sources.list
+sources.list.d/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor directories
+.idea/
+.vscode/
+*.iml
