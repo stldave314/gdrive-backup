@@ -268,8 +268,13 @@ setup_rclone_drive() {
     read -r -p "$(echo -e "  ${YELLOW}Press ENTER to generate the authorization URL...${NC}")"
     echo
 
-    rclone --auth-no-open-browser config create "$GDRIVE_REMOTE" drive \
+    RCLONE_AUTH_NO_OPEN_BROWSER=true rclone config create "$GDRIVE_REMOTE" drive \
         scope="drive"
+
+    if ! rclone listremotes 2>/dev/null | grep -q "^${GDRIVE_REMOTE}:$"; then
+        print_error "Drive remote was not created. Run 'rclone config' manually to diagnose."
+        exit 1
+    fi
 
     print_ok "Google Drive remote '${GDRIVE_REMOTE}' configured."
 }
