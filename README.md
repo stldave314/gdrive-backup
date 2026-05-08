@@ -6,6 +6,7 @@ Wipe your OS, pull this repo, run `setup`, run `restore` — you're back.
 
 ## Features
 
+- **Minimal Drive access** — uses `drive.file` scope so rclone can only see files it creates. Your existing Drive contents are never accessible to it.
 - **Encrypted at rest** — rclone crypt encrypts both file contents and filenames before anything touches Google Drive. Google cannot read your files.
 - **Three backup methods** — rclone sync (recommended), rsync hardlink snapshots, or tar archives. Explained interactively during setup.
 - **Incremental uploads** — only changed files are transferred after the first run.
@@ -102,6 +103,14 @@ Explained interactively during setup. Here's the short version:
 rclone crypt is applied transparently before upload. Both file contents and filenames are encrypted — the directory structure visible on Google Drive is unreadable without your passwords.
 
 > **Your crypt passwords cannot be recovered.** If you lose them, your backup cannot be decrypted. Store them in a password manager.
+
+## Google Drive permissions
+
+The script requests the `drive.file` scope — the most restrictive option available. This means:
+
+- rclone can **only** access files it creates. Your existing Drive contents are completely invisible to it.
+- Backups do **not** appear in the Google Drive web UI (they live in a hidden app-specific space).
+- After an OS reinstall, re-authenticating with the same Google account restores full access to your backups, since access is tied to the app + account combination, not the machine.
 
 ## Configuration
 

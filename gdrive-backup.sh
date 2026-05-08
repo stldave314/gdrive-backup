@@ -263,13 +263,17 @@ setup_rclone_drive() {
     print_info "rclone will print a URL below. Copy it and open it in any browser."
     print_info "Log in to Google, grant access, and rclone will complete automatically."
     echo
+    print_info "Access requested: ${BOLD}drive.file${NC} scope only."
+    print_info "This means rclone can only see files it creates — not your existing"
+    print_info "Drive contents. Backups will not be visible in the Drive web UI."
+    echo
     print_warn "Make sure you are logged into the correct Google account before proceeding."
     echo
     read -r -p "$(echo -e "  ${YELLOW}Press ENTER to generate the authorization URL...${NC}")"
     echo
 
     RCLONE_AUTH_NO_OPEN_BROWSER=true rclone config create "$GDRIVE_REMOTE" drive \
-        scope="drive"
+        scope="drive.file"
 
     if ! rclone listremotes 2>/dev/null | grep -q "^${GDRIVE_REMOTE}:$"; then
         print_error "Drive remote was not created. Run 'rclone config' manually to diagnose."
