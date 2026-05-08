@@ -127,6 +127,32 @@ ask_password() {
     done
 }
 
+_rclone_obscure() {
+    # Implements rclone's obscure format (AES-256-CTR + base64url) without ever
+    # placing the password in a process argument list.
+    #
+    # How it stays out of `ps` / /proc/*/cmdline:
+    #   - `printf '%s' "$1"` is a bash builtin — no child process is forked, so
+    #     the password value never appears in any process's argv.
+    #   - The data reaches `openssl enc` via an anonymous pipe as stdin.
+    #   - openssl's own args are only the key and IV, neither of which is secret
+    #     (the key is hardcoded in rclone's public source; the IV is random and
+    #     included unencrypted in the output anyway).
+    #
+    # The key below is rclone's own hardcoded obscure key from its source code.
+    # It is NOT a secret — it provides obfuscation only, not encryption.
+    local _key="9c935b48730a554d6bfd7c63c886a92bd0906d9faac84cde31b3a39e33361d5c"
+    local _iv
+    _iv=$(openssl rand -hex 16)
+    printf '%s' "$1" \
+        | openssl enc -aes-256-ctr -K "$_key" -iv "$_iv" -nosalt -nopad 2>/dev/null \
+        | python3 -c "
+import sys, base64
+iv = bytes.fromhex('${_iv}')
+sys.stdout.write(base64.urlsafe_b64encode(iv + sys.stdin.buffer.read()).rstrip(b'=').decode())
+"
+}
+
 ask_choice() {
     # ask_choice "prompt" default opt1 opt2 ...
     local prompt="$1" default="$2"; shift 2
@@ -147,7 +173,7 @@ ask_choice() {
 check_deps() {
     print_step "Checking dependencies..."
     local missing=()
-    for cmd in rsync tar curl; do
+    for cmd in rsync tar curl openssl python3; do
         command -v "$cmd" &>/dev/null || missing+=("$cmd")
     done
     command -v rclone &>/dev/null || missing+=("rclone")
@@ -325,25 +351,56 @@ setup_rclone_crypt() {
     if rclone listremotes 2>/dev/null | grep -q "^${CRYPT_REMOTE}:$"; then
         print_ok "Crypt remote '${CRYPT_REMOTE}' already exists."
         ask_yes_no "Reconfigure it?" "n" || return
-        rclone config delete "$CRYPT_REMOTE" 2>/dev/null || true
     fi
 
     local pass1 pass2
     pass1=$(ask_password "Main encryption password")
     pass2=$(ask_password "Salt password")
 
+    print_step "Configuring encryption..."
+
+    # Disable xtrace for this block so `bash -x` cannot print password values.
+    { set +x; } 2>/dev/null
+
     local obs1 obs2
-    obs1=$(rclone obscure "$pass1")
-    obs2=$(rclone obscure "$pass2")
+    obs1=$(_rclone_obscure "$pass1")
+    obs2=$(_rclone_obscure "$pass2")
 
-    rclone config create "$CRYPT_REMOTE" crypt \
-        remote="${GDRIVE_REMOTE}:${DRIVE_BASE_PATH}" \
-        filename_encryption=standard \
-        directory_name_encryption=true \
-        password="$obs1" \
-        password2="$obs2"
+    # Write the crypt remote directly into rclone's config file using only bash
+    # builtins (printf). No external process receives obs1/obs2 as an argument —
+    # they stay as bash variables until written to the file descriptor.
+    local _rclone_cfg="${XDG_CONFIG_HOME:-$HOME/.config}/rclone/rclone.conf"
+    mkdir -p "$(dirname "$_rclone_cfg")"
 
+    # Strip any existing crypt section so reconfiguration is clean.
+    if [[ -f "$_rclone_cfg" ]]; then
+        local _tmp
+        _tmp=$(mktemp)
+        awk -v section="[${CRYPT_REMOTE}]" '
+            $0 == section { skip=1; next }
+            skip && /^\[/ { skip=0 }
+            !skip         { print }
+        ' "$_rclone_cfg" > "$_tmp" && mv "$_tmp" "$_rclone_cfg"
+    fi
+
+    # Append the new section. Every line here uses bash printf builtins —
+    # obs1 and obs2 are bash variables written to a file descriptor, not
+    # passed as arguments to any child process.
+    {
+        printf '\n[%s]\n'                    "$CRYPT_REMOTE"
+        printf 'type = crypt\n'
+        printf 'remote = %s:%s\n'            "$GDRIVE_REMOTE" "$DRIVE_BASE_PATH"
+        printf 'filename_encryption = standard\n'
+        printf 'directory_name_encryption = true\n'
+        printf 'password = %s\n'             "$obs1"
+        printf 'password2 = %s\n'            "$obs2"
+    } >> "$_rclone_cfg"
+
+    chmod 600 "$_rclone_cfg"
+
+    # Wipe all sensitive variables from bash memory.
     unset pass1 pass2 obs1 obs2
+
     print_ok "Encryption configured."
 }
 
